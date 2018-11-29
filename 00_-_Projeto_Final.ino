@@ -2,7 +2,7 @@
 //    PROJETO FINAL DO CURSO DE ARDUÍNO IFSC 2018.2
 //
 //ALUNOS: Guilherme Maximiliano Reichert Negri, guilhermenegri@gmail.com
-//        Giovane Alexandre, giovanealexandre@hotmail.com
+//        Giovane Alexandre Werlang, giovanealexandre@hotmail.com
 //
 // Código do programa de Portão Eletrônico Automátio
 // 
@@ -35,6 +35,7 @@
 #include "Button.h"
 #include "LiquidCrystal.h"
 #include "Ultrasonic.h"
+#include "IRremote.h"
 
 // DEFINIÇÃO DOS PINOS
 
@@ -58,20 +59,25 @@
 #define hcPin_trig 32
 #define hcPin_echo 33
 
+//Infra Vermelho
+#define irPin 34
+
 // VARIÁVEIS GLOBAIS E DEFINIÇÕES
 const int lcdCol = 16;  //Configuração do número de colunas do LCD
 const int lcdRow =  2;  //Configuração do número de linhas do LCD
 int caseVar = 0;        //Variável de controle do switch case
 int msOpened = 0;       //Variável Portão Aberto
 int msClosed = 0;       //Variável Portão Fechado
-
+int on = 0;                     //IR var
+unsigned long last = millis();  //IR var
 
 // INICIALIZAÇÃO DE OBJETOS
 LiquidCrystal lcd(lcdPin_RS,lcdPin_E,lcdPin_D4,lcdPin_D5,lcdPin_D6,lcdPin_D7);
 Button msButtonOpened(msPinOpened); //Ojbeto da biblioteca Button.h
 Button msButtonClosed(msPinClosed); //Ojbeto da biblioteca Button.h
 Ultrasonic ultrasonic(hcPin_trig,hcPin_echo);
-
+IRrecv irValue(irPin);
+decode_results irResults;
  
 void setup() {
   //Debug
@@ -79,13 +85,16 @@ void setup() {
   //
   
   lcd.begin(lcdCol, lcdRow);  //Configuração do número de colunas e linhas do LCD
-  lcdWrite(2,"FIC ARDUINO",3,"IFSC-SLO");
+  lcdWrite(2,"FIC ARDUINO",3,"Smart Gate");
   msButtonOpened.init();    //Inicializa botão Portão Aberto
   msButtonClosed.init();    //Inicializa botão Portão Fechado
   pinMode(relayPinPower,OUTPUT);
   pinMode(relayPinGate,OUTPUT);
   digitalWrite(relayPinPower,HIGH);  //Relé "Low level trigger", iniciar em HIGH para não atuar relé
   digitalWrite(relayPinGate,HIGH);   //Relé "Low level trigger", iniciar em HIGH para não atuar relé
+  pinMode(irPin,INPUT);   //Inicializa Infra Vermelho
+  pinMode(13, OUTPUT);
+  irValue.enableIRIn();   //Inicializa o receiver
 }
 
 void loop() {
@@ -98,26 +107,10 @@ void loop() {
   Serial.println(msClosed);
   //delay(400);
   //
-  msOpened = msButtonOpened.onRelease();   //Leitura do Micro Switch Aberto
-  msClosed = msButtonClosed.onRelease();   //Leitura do Micro Switch Fechado
 
-  //Le as informacoes do sensor ultrasonico em cm
-  float ultraValue;
-  long microsec = ultrasonic.timing();
-  ultraValue = ultrasonic.convert(microsec,Ultrasonic::CM);
-  //Escreve informações do sensor ultrasonico no LCD  
-  lcdWrite(0,"Leitura HC-SR04",0,"Dist. = "+String(ultraValue)+"    ");
-
-  // Le Micro Switches
-  if (msOpened==1){
-    caseVar = 1;
-  }
-  else if (msClosed==1){
-    caseVar = 2;
-  }
-  else {
-    caseVar = 0;
-  }
+  irRead();
+  msRead();
+   
   switch (caseVar){
     case 0:
     
@@ -148,6 +141,35 @@ void lcdWrite(int lcdRow1, String lcdRow1Txt, int lcdRow2, String lcdRow2Txt){
   lcd.setCursor(lcdRow2,1);   //Posiciona cursor na linha 2
   lcd.print(lcdRow2Txt);      //Escreve na linha 2
 }
+// Função Lê Infra Vermelho
+void irRead() {
+  if (irValue.decode(&irResults)) {
+    // If it's been at least 1/4 second since the last
+    // IR received, toggle the relay
+    if (millis() - last > 250) {
+      on = !on;
+      digitalWrite(13, on ? HIGH : LOW);
+    }
+    last = millis();      
+    irValue.resume(); // Receive the next value
+  }
+}
+// Função Lê Micro Switches
+void msRead() {
+  msOpened = msButtonOpened.onRelease();   //Leitura do Micro Switch Aberto
+  msClosed = msButtonClosed.onRelease();   //Leitura do Micro Switch Fechado
+
+  // Le Micro Switches
+  if (msOpened==1){
+    caseVar = 1;
+  }
+  else if (msClosed==1){
+    caseVar = 2;
+  }
+  else {
+    caseVar = 0;
+  }
+}
 // Função Abrir portão
 void openGate(){
   digitalWrite(relayPinPower,LOW);
@@ -166,7 +188,21 @@ void gateOpened(){
 // Função Fehar portão
 void closeGate(){
   digitalWrite(relayPinPower,LOW);
-  delay(10000);
+  for (int i=0; i <= 100; i++){
+    //Le as informacoes do sensor ultrasonico em cm
+    float hcValue;          //Variável que armazena valor lido pelo HC-SR04
+    long microsec = ultrasonic.timing();
+    hcValue = ultrasonic.convert(microsec,Ultrasonic::CM);
+    //Escreve informações do sensor ultrasonico no LCD  
+    lcdWrite(0,"Leitura HC-SR04",0,"Dist. = "+String(hcValue)+"    ");
+    if (hcValue<100){
+      openGate();
+      break;
+      }
+    else {
+      delay(10);
+    }
+  }
   digitalWrite(relayPinPower,HIGH);
 }
 
