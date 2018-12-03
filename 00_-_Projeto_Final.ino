@@ -32,7 +32,6 @@
 //-----------------------------------------------------------------------
 // BIBLIOTECAS AUXILIARES
 #include "Arduino.h"
-#include "Button.h"
 #include "LiquidCrystal.h"
 #include "Ultrasonic.h"
 #include "IRremote.h"
@@ -66,15 +65,16 @@
 const int lcdCol = 16;  //Configuração do número de colunas do LCD
 const int lcdRow =  2;  //Configuração do número de linhas do LCD
 int caseVar = 0;        //Variável de controle do switch case
-int msOpened = 0;       //Variável Portão Aberto
-int msClosed = 0;       //Variável Portão Fechado
+int msOpenedStatus = 0;       //Variável Status do micro switch Portão Aberto
+int msClosedStatus = 0;       //Variável Status do micro switch Portão Fechado
 int on = 0;                     //IR var
 unsigned long last = millis();  //IR var
+int lcdChange = 0;      //Contador para alterar mensagem no LCD
+const int lcdAnimaConst = 15;  //Constante para regular velocidade de troca de tela no LCD
+unsigned long lcdLast = millis();  //LCD var
 
 // INICIALIZAÇÃO DE OBJETOS
 LiquidCrystal lcd(lcdPin_RS,lcdPin_E,lcdPin_D4,lcdPin_D5,lcdPin_D6,lcdPin_D7);
-Button msButtonOpened(msPinOpened); //Ojbeto da biblioteca Button.h
-Button msButtonClosed(msPinClosed); //Ojbeto da biblioteca Button.h
 Ultrasonic ultrasonic(hcPin_trig,hcPin_echo);
 IRrecv irValue(irPin);
 decode_results irResults;
@@ -85,61 +85,61 @@ void setup() {
   //
   
   lcd.begin(lcdCol, lcdRow);  //Configuração do número de colunas e linhas do LCD
-  lcdWrite(2,"FIC ARDUINO",3,"Smart Gate");
-  msButtonOpened.init();    //Inicializa botão Portão Aberto
-  msButtonClosed.init();    //Inicializa botão Portão Fechado
+  pinMode(msPinOpened,INPUT);
+  pinMode(msPinClosed,INPUT);
   pinMode(relayPinPower,OUTPUT);
   pinMode(relayPinGate,OUTPUT);
   digitalWrite(relayPinPower,HIGH);  //Relé "Low level trigger", iniciar em HIGH para não atuar relé
   digitalWrite(relayPinGate,HIGH);   //Relé "Low level trigger", iniciar em HIGH para não atuar relé
   pinMode(irPin,INPUT);   //Inicializa Infra Vermelho
-  pinMode(13, OUTPUT);
   irValue.enableIRIn();   //Inicializa o receiver
 }
 
 void loop() {
   //Debug
-  Serial.print("caseVar: ");
-  Serial.print(caseVar);
-  Serial.print(" ;msO: ");
-  Serial.print(msOpened);
-  Serial.print(" ;msC: ");
-  Serial.println(msClosed);
+  //Serial.print("caseVar: ");
+  //Serial.print(caseVar);
+  //Serial.print(" ;msO: ");
+  //Serial.print(msOpened);
+  //Serial.print(" ;msC: ");
+  //Serial.println(msClosed);
   //delay(400);
   //
 
   irRead();
   msRead();
-   
-  switch (caseVar){
-    case 0:
-    
-    break;
-    case 1:
-    //Debug
-    Serial.println("Case1");
-    //
-      gateOpened();
-    break;
-    case 2:
-    //Debug
-    Serial.println("Case2");
-    //
-      gateClosed();
-    break;
-       
-  }
- 
-
+  lcdAnima(); 
 }
 
 // Função Escreve no LCD
-void lcdWrite(int lcdRow1, String lcdRow1Txt, int lcdRow2, String lcdRow2Txt){
-  lcd.clear();                //Limpa display
-  lcd.setCursor(lcdRow1,0);   //Posiciona cursor na linha 1
-  lcd.print(lcdRow1Txt);       //Escreve na linha 1
-  lcd.setCursor(lcdRow2,1);   //Posiciona cursor na linha 2
-  lcd.print(lcdRow2Txt);      //Escreve na linha 2
+void lcdWrite(int lcdRow1, String lcdRow1Txt, int lcdRow2, String lcdRow2Txt,bool lcdClear){
+  if (lcdClear) { lcd.clear(); }  //Limpa display
+  lcd.setCursor(lcdRow1,0);       //Posiciona cursor na linha 1
+  lcd.print(lcdRow1Txt);          //Escreve na linha 1
+  lcd.setCursor(lcdRow2,1);       //Posiciona cursor na linha 2
+  lcd.print(lcdRow2Txt);          //Escreve na linha 2
+}
+// Função que anima o LCD enquando nada acontece
+void lcdAnima() {
+  switch (lcdChange){
+    case 0:   lcdWrite(2,"FIC ARDUINO",2,"PROJETO FINAL",1);          break;
+    case 250: lcdWrite(3,"SMART GATE",4," (-_-) ",1);                 break;
+    case 290: lcdWrite(3,"SMART GATE",4," (o_o) ",0);                 break;
+    case 320: lcdWrite(3,"SMART GATE",4," (-_-) ",0);                 break;
+    case 340: lcdWrite(3,"SMART GATE",4," (0_0) ",0);                 break;
+    case 370: lcdWrite(3,"SMART GATE",4,"_(0_0)_",0);                 break;
+    case 390: lcdWrite(3,"SMART GATE",4,"|(0_0)_",0);                 break;
+    case 410: lcdWrite(3,"SMART GATE",4,"/(0_0)_",0);                 break;
+    case 430: lcdWrite(3,"SMART GATE",4,"|(0_0)_",0);                 break;
+    case 450: lcdWrite(3,"SMART GATE",4,"/(0_0)_",0);                 break;
+    case 470: lcdWrite(3,"SMART GATE",4,"_(0_0)_",0);                 break;
+    case 500: lcdWrite(0,"Guilherme Negri",0,"Giovane Werlang",1);    break;
+    case 800: lcdChange = -1;                                         break;
+  }
+  if (millis()-lcdLast > lcdAnimaConst) {
+    lcdChange++;
+    lcdLast=millis();
+  }
 }
 // Função Lê Infra Vermelho
 void irRead() {
@@ -148,7 +148,13 @@ void irRead() {
     // IR received, toggle the relay
     if (millis() - last > 250) {
       on = !on;
-      digitalWrite(13, on ? HIGH : LOW);
+      //digitalWrite(52, on ? HIGH : LOW);
+      if (on==1) {
+        openGate();
+      }
+      else if (on==0){
+        closeGate();
+       }
     }
     last = millis();      
     irValue.resume(); // Receive the next value
@@ -156,60 +162,55 @@ void irRead() {
 }
 // Função Lê Micro Switches
 void msRead() {
-  msOpened = msButtonOpened.onRelease();   //Leitura do Micro Switch Aberto
-  msClosed = msButtonClosed.onRelease();   //Leitura do Micro Switch Fechado
-
-  // Le Micro Switches
-  if (msOpened==1){
-    caseVar = 1;
-  }
-  else if (msClosed==1){
-    caseVar = 2;
-  }
-  else {
-    caseVar = 0;
-  }
+  msOpenedStatus = !digitalRead(msPinOpened); //Leitura do micro switch Aberto
+  msClosedStatus = !digitalRead(msPinClosed); //Leitura do micro switch Fechado
 }
 // Função Abrir portão
 void openGate(){
   digitalWrite(relayPinPower,LOW);
   digitalWrite(relayPinGate,LOW);
-  delay(10000);
-  digitalWrite(relayPinPower,HIGH);
-  digitalWrite(relayPinGate,HIGH);
+  while (msOpenedStatus==0){
+    msOpenedStatus = !digitalRead(msPinOpened); //Leitura do micro switch Aberto
+    lcdAnima();
+  }
+  gateOpened();
 }
 // Rotina quando portão está aberto
 void gateOpened(){
-  Serial.println("openGate");
-  lcdWrite(1,"Portao Aberto",1,"Moendo no Void");
-  openGate();
+  digitalWrite(relayPinPower,HIGH);
+  digitalWrite(relayPinGate,HIGH);
+  lcdWrite(1,"Portao ABERTO",2,"com sucesso!",1);
+  delay(1000);
+  lcdChange = 0;
 }
 
 // Função Fehar portão
 void closeGate(){
   digitalWrite(relayPinPower,LOW);
-  for (int i=0; i <= 100; i++){
+  while (msClosedStatus==0){
+    msClosedStatus = !digitalRead(msPinClosed); //Leitura do micro switch Fechado
+    
     //Le as informacoes do sensor ultrasonico em cm
     float hcValue;          //Variável que armazena valor lido pelo HC-SR04
     long microsec = ultrasonic.timing();
     hcValue = ultrasonic.convert(microsec,Ultrasonic::CM);
     //Escreve informações do sensor ultrasonico no LCD  
-    lcdWrite(0,"Leitura HC-SR04",0,"Dist. = "+String(hcValue)+"    ");
+    lcdWrite(0,"Leitura HC-SR04",0,"Dist. = "+String(hcValue)+"    ",0);
     if (hcValue<100){
+      on=!on;
       openGate();
       break;
-      }
-    else {
-      delay(10);
-    }
+    }  
   }
-  digitalWrite(relayPinPower,HIGH);
+  gateClosed();
 }
 
 // Rotina quando portão está fechado
 void gateClosed(){
-  lcdWrite(1,"Portao Fechado",0,"Debulhando Milho");
-  closeGate();
+  digitalWrite(relayPinPower,HIGH);
+  lcdWrite(1,"Portao FECHADO",2,"com sucesso!",1);
+  delay(1000);
+  lcdChange = 0;
 }
 
 //-----------------------------------------------------------------------
