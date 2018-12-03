@@ -59,40 +59,41 @@
 #define hcPin_echo 33
 
 //Infra Vermelho
-#define irPin 34
+#define IRrecvPin 34
 
 // VARIÁVEIS GLOBAIS E DEFINIÇÕES
-const int lcdCol = 16;  //Configuração do número de colunas do LCD
-const int lcdRow =  2;  //Configuração do número de linhas do LCD
-int caseVar = 0;        //Variável de controle do switch case
-int msOpenedStatus = 0;       //Variável Status do micro switch Portão Aberto
-int msClosedStatus = 0;       //Variável Status do micro switch Portão Fechado
-int on = 0;                     //IR var
-unsigned long last = millis();  //IR var
-int lcdChange = 0;      //Contador para alterar mensagem no LCD
-const int lcdAnimaConst = 15;  //Constante para regular velocidade de troca de tela no LCD
-unsigned long lcdLast = millis();  //LCD var
+const int lcdCol = 16;                  //Configuração do número de colunas do LCD
+const int lcdRow =  2;                  //Configuração do número de linhas do LCD
+int caseVar = 0;                        //Variável de controle do switch case
+int msOpenedStatus = 0;                 //Variável Status do micro switch Portão Aberto
+int msClosedStatus = 0;                 //Variável Status do micro switch Portão Fechado
+unsigned long IRrecvlast = millis();    //Variável com tempo inicial para IRrecev
+int lcdChange = 0;                      //Contador para alterar mensagem no LCD
+const int lcdAnimaConst = 15;           //Constante para regular velocidade de troca de tela no LCD
+unsigned long lcdLast = millis();       //Variável com tempo inicial para LCD Anima
+unsigned long gateAutoCloseLast = 0;    //Variável com tempo inicial para gateAutoClose
+bool gateAutoCloseOn = 1;               //Variável boleana gateAutoClose
 
 // INICIALIZAÇÃO DE OBJETOS
 LiquidCrystal lcd(lcdPin_RS,lcdPin_E,lcdPin_D4,lcdPin_D5,lcdPin_D6,lcdPin_D7);
 Ultrasonic ultrasonic(hcPin_trig,hcPin_echo);
-IRrecv irValue(irPin);
-decode_results irResults;
+IRrecv IRrecvValue(IRrecvPin);
+decode_results IRrecvResults;
  
 void setup() {
   //Debug
   Serial.begin(9600);
   //
   
-  lcd.begin(lcdCol, lcdRow);  //Configuração do número de colunas e linhas do LCD
-  pinMode(msPinOpened,INPUT);
-  pinMode(msPinClosed,INPUT);
-  pinMode(relayPinPower,OUTPUT);
-  pinMode(relayPinGate,OUTPUT);
-  digitalWrite(relayPinPower,HIGH);  //Relé "Low level trigger", iniciar em HIGH para não atuar relé
-  digitalWrite(relayPinGate,HIGH);   //Relé "Low level trigger", iniciar em HIGH para não atuar relé
-  pinMode(irPin,INPUT);   //Inicializa Infra Vermelho
-  irValue.enableIRIn();   //Inicializa o receiver
+  lcd.begin(lcdCol, lcdRow);        //Configuração do número de colunas e linhas do LCD
+  pinMode(msPinOpened,INPUT);       //Configuração do pino do micro switch "Portão Aberto"
+  pinMode(msPinClosed,INPUT);       //Configuração do pino do micro switch "Portão Fechado"
+  pinMode(relayPinPower,OUTPUT);    //Configuração do pino do relé de alimentação "Power"
+  pinMode(relayPinGate,OUTPUT);     //Configuração do pino do relé de direção (abre/fecha) "Gate"
+  digitalWrite(relayPinPower,HIGH); //Relé "Low level trigger", iniciar em HIGH para não atuar relé
+  digitalWrite(relayPinGate,HIGH);  //Relé "Low level trigger", iniciar em HIGH para não atuar relé
+  pinMode(IRrecvPin,INPUT);             //Inicializa Infra Vermelho
+  IRrecvValue.enableIRIn();             //Inicializa o receiver
 }
 
 void loop() {
@@ -106,9 +107,10 @@ void loop() {
   //delay(400);
   //
 
-  irRead();
+  IRrecvRead();
   msRead();
-  lcdAnima(); 
+  lcdAnima();
+  gateAutoClose(5000); 
 }
 
 // Função Escreve no LCD
@@ -142,22 +144,15 @@ void lcdAnima() {
   }
 }
 // Função Lê Infra Vermelho
-void irRead() {
-  if (irValue.decode(&irResults)) {
-    // If it's been at least 1/4 second since the last
-    // IR received, toggle the relay
-    if (millis() - last > 250) {
-      on = !on;
-      //digitalWrite(52, on ? HIGH : LOW);
-      if (on==1) {
-        openGate();
-      }
-      else if (on==0){
-        closeGate();
-       }
+void IRrecvRead() {
+  if (IRrecvValue.decode(&IRrecvResults)) {
+    if (millis() - IRrecvlast > 250) {
+      if      ((msClosedStatus==1)&(msOpenedStatus==0)) {  openGate(); }
+      else if ((msClosedStatus==0)&(msOpenedStatus==1)) {  closeGate();}
+      else {lcdWrite(3,"SMART GATE",2,"What to do?",1); delay(1000);}
     }
-    last = millis();      
-    irValue.resume(); // Receive the next value
+    IRrecvlast = millis();      
+    IRrecvValue.resume(); // Receive the next value
   }
 }
 // Função Lê Micro Switches
@@ -170,7 +165,7 @@ void openGate(){
   digitalWrite(relayPinPower,LOW);
   digitalWrite(relayPinGate,LOW);
   while (msOpenedStatus==0){
-    msOpenedStatus = !digitalRead(msPinOpened); //Leitura do micro switch Aberto
+    msRead();
     lcdAnima();
   }
   gateOpened();
@@ -182,13 +177,21 @@ void gateOpened(){
   lcdWrite(1,"Portao ABERTO",2,"com sucesso!",1);
   delay(1000);
   lcdChange = 0;
+  gateAutoCloseLast = millis();
 }
-
+// Função Fechamento Automático
+void gateAutoClose(int timeToClose){
+  if ((gateAutoCloseOn)&(msOpenedStatus==1)){
+    if (millis()-gateAutoCloseLast > timeToClose) {
+      closeGate();
+    }
+  }
+}
 // Função Fehar portão
 void closeGate(){
   digitalWrite(relayPinPower,LOW);
   while (msClosedStatus==0){
-    msClosedStatus = !digitalRead(msPinClosed); //Leitura do micro switch Fechado
+    msRead();
     
     //Le as informacoes do sensor ultrasonico em cm
     float hcValue;          //Variável que armazena valor lido pelo HC-SR04
@@ -197,7 +200,6 @@ void closeGate(){
     //Escreve informações do sensor ultrasonico no LCD  
     lcdWrite(0,"Leitura HC-SR04",0,"Dist. = "+String(hcValue)+"    ",0);
     if (hcValue<100){
-      on=!on;
       openGate();
       break;
     }  
