@@ -1,8 +1,9 @@
------------------------------------------------------------------------
+    **********************************************
+    
       PROJETO FINAL DO CURSO DE ARDUÍNO IFSC 2018.2
       
-  ALUNOS:  Guilherme Maximiliano Reichert Negri      guilhermenegri@gmail.com
-           Giovane Alexandre Werlang                 giovanealexandre@hotmail.com
+*  ALUNOS:  Guilherme Maximiliano Reichert Negri      guilhermenegri@gmail.com
+*           Giovane Alexandre Werlang                 giovanealexandre@hotmail.com
            
   OBJETIVO:  Controle de portão eletrônico (mas poderia ser qualquer carga!)
   MOTIVAÇÃO: Moro em um condomínio com sala comercial no térreo. Durante o horário comercial o portão fica
@@ -24,12 +25,12 @@
     ********** VERSÃO PARA ARDUINO MEGA **********
     **********************************************
  
-  MELHORIAS A IMPLEMENTAR:
-  1 - Gravação de novo controle na memória EEPROM
-  2 - Conexão com internet via ESP 8266 e protocolo MQTT
-  3 - Implementar Photo Resistor
-  4 - Operar settings via controle IR
-  5 - Implementar barreia IR e remover Ultrasonic
+*  MELHORIAS A IMPLEMENTAR:
+*  1 - Gravação de novo controle na memória EEPROM
+*  2 - Conexão com internet via ESP 8266 e protocolo MQTT
+*  3 - Implementar Photo Resistor
+*  4 - Operar settings via controle IR
+*  5 - Implementar barreia IR e remover Ultrasonic
  -----------------------------------------------------------------------
  
 OBS: A biblioteca IRremote.h utiliza o timer 1, assim como a função nativa tone(), o que gera conflito e não compila o código.
